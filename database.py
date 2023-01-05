@@ -11,14 +11,14 @@ CREATE_OPTIONS = """CREATE TABLE IF NOT EXISTS options
 CREATE_VOTES = """CREATE TABLE IF NOT EXISTS votes
 (username TEXT, option_id INTEGER, FOREIGN KEY(option_id) REFERENCES options (id));"""
 
-
+SELECT_POLL = "SELECT * FROM polls WHERE id = %s;"
 SELECT_ALL_POLLS = "SELECT * FROM polls;"
-SELECT_POLL_WITH_OPTIONS = """SELECT * FROM polls
-JOIN options ON polls.id = options.poll_id
-WHERE polls.id = %s;"""
+# SELECT_POLL_WITH_OPTIONS = """SELECT * FROM polls
+# JOIN options ON polls.id = options.poll_id
+# WHERE polls.id = %s;"""
+SELECT_POLL_OPTIONS = "SELECT * FROM options WHERE poll_id = %s;"
 # Nested query. The query inside parenthesis obtains the id of the latest poll, i.e. the poll with the largest id
 SELECT_LATEST_POLL = """SELECT * FROM polls
-JOIN options ON polls.id = options.poll_id
 WHERE polls.id = (
     SELECT id FROM polls ORDER BY id DESC LIMIT 1
 );"""
@@ -32,19 +32,20 @@ FROM options
 LEFT JOIN votes ON options.id = votes.option_id
 WHERE options.poll_id = %s
 GROUP BY options.id;"""
-SELECT_RANDOM_VOTE = "SELECT * FROM votes WHERE option_id = %s ORDER BY RANDOM() LIMIT 1;"
+
+SELECT_OPTION = "SELECT * FROM options WHERE id = %s;"
+SELECT_VOTES_FOR_OPTION = "SELECT * FROM votes WHERE option_id = %s;"
 
 INSERT_POLL_RETURN_ID = "INSERT INTO polls (title, owner_username) VALUES (%s, %s) RETURNING id;"
-INSERT_OPTION = "INSERT INTO options (option_text, poll_id) VALUES %s;"
+INSERT_OPTION_RETURN_ID = "INSERT INTO options (option_text, poll_id) VALUES (%s, %s) RETURNING id;"
 INSERT_VOTE = "INSERT INTO votes (username, option_id) VALUES (%s, %s);"
 
 # ============================================================================ #
 # Type definitions
 
 Poll = Tuple[int, str, str]
+Option = Tuple[int, str, int]
 Vote = Tuple[str, int]
-PollWithOption = Tuple[int, str, str, int, str, int]
-PollResults = Tuple[int, str, int, float]
 
 # ============================================================================ #
 # Functions
@@ -57,6 +58,22 @@ def create_tables(connection):
             cursor.execute(CREATE_VOTES)
 
 
+def create_poll(connection, title:str, owner:str):
+    with connection:
+        with connection.cursor() as cursor:
+            cursor.execute(INSERT_POLL_RETURN_ID, (title, owner))
+            poll_id = cursor.fetchone()[0]
+            return poll_id
+
+# ============================================================================ #
+# Functions for Poll
+
+def get_poll(connection, poll_id:int) -> Poll:
+    with connection:
+        with connection.cursor() as cursor:
+            cursor.execute(SELECT_POLL, (poll_id,))
+            return cursor.fetchone()
+
 def get_polls(connection) -> list[Poll]:
     with connection:
         with connection.cursor() as cursor:
@@ -64,42 +81,46 @@ def get_polls(connection) -> list[Poll]:
             return cursor.fetchall()
 
 
-def get_latest_poll(connection) -> list[PollWithOption]:
+def get_latest_poll(connection) -> Poll:
     with connection:
         with connection.cursor() as cursor:
             cursor.execute(SELECT_LATEST_POLL)
-            return cursor.fetchall()
-
-
-def get_poll_details(connection, poll_id:int) -> list[PollWithOption]:
-    with connection:
-        with connection.cursor() as cursor:
-            cursor.execute(SELECT_POLL_WITH_OPTIONS, (poll_id,))
-            return cursor.fetchall()
-
-
-def get_poll_and_vote_results(connection, poll_id:int) -> list[PollResults]:
-    with connection:
-        with connection.cursor() as cursor:
-            cursor.execute(SELECT_POLL_VOTE_DETAILS, (poll_id,))
-            return cursor.fetchall()
-
-
-def get_random_poll_vote(connection, option_id:int) -> Vote:
-    with connection:
-        with connection.cursor() as cursor:
-            cursor.execute(SELECT_RANDOM_VOTE, (option_id,))
             return cursor.fetchone()
 
 
-def create_poll(connection, title:str, owner:str, options:list[str]):
+def get_poll_options(connection, poll_id:int) -> list[Option]:
     with connection:
         with connection.cursor() as cursor:
-            cursor.execute(INSERT_POLL_RETURN_ID, (title, owner))
-            poll_id = cursor.fetchone()[0]
-            
-            option_values = [(option_text, poll_id) for option_text in options]
-            execute_values(cursor, INSERT_OPTION, option_values)
+            cursor.execute(SELECT_POLL_OPTIONS, (poll_id,))
+            return cursor.fetchall()
+
+
+# ============================================================================ #
+# Functions for Option
+
+def get_option(connection, option_id:int) -> Option:
+    with connection:
+        with connection.cursor() as cursor:
+            cursor.execute(SELECT_OPTION, (option_id,))
+            return cursor.fetchone()
+
+
+def add_option(connection, option_text, poll_id:int):
+    with connection:
+        with connection.cursor() as cursor:
+            cursor.execute(INSERT_OPTION_RETURN_ID, (option_text, poll_id))
+            option_id = cursor.fetchone()[0]
+            return option_id
+
+
+# ============================================================================ #
+# Functions for Vote
+
+def get_votes_for_option(connection, option_id:int) -> list[Vote]:
+    with connection:
+        with connection.cursor() as cursor:
+            cursor.execute(SELECT_VOTES_FOR_OPTION, (option_id,))
+            return cursor.fetchall()
 
 
 def add_poll_vote(connection, username:str, option_id:int):
