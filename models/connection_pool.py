@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from psycopg2.pool import SimpleConnectionPool
 from dotenv import load_dotenv
 
-DATABASE_PROMPT = "Please enter the DATABASE_URI, or leave empty to load from .env."
+DATABASE_PROMPT = "Please enter the DATABASE_URI, or leave empty to load from \\.env:"
 
 database_uri = input(DATABASE_PROMPT)
 if not database_uri:

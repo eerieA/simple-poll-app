@@ -1,4 +1,6 @@
 import random
+import datetime
+import pytz
 from models.connection_pool import get_connection
 from models.option import Option
 from models.poll import Poll
@@ -67,6 +69,23 @@ def show_poll_votes():
             print(f"{option.text} got {votes} votes ({percentage:.2f}%)")
     except ZeroDivisionError:
         print("No votes cast for this poll yet.")
+    
+    vote_log = input("Would do like to see the vote log? (y/n) ")
+    if vote_log == "y":
+        _print_vote_for_options(options)
+    
+    print("\n")
+
+
+def _print_vote_for_options(options:list[Option]):
+    for option in options:
+        print(f"-- {option.text} --")
+        for vote in option.votes:
+            naive_datetime = datetime.datetime.utcfromtimestamp(vote[2])
+            utc_date = pytz.utc.localize(naive_datetime)
+            local_date = utc_date.astimezone(pytz.timezone("Canada/Pacific"))
+            local_date_as_str = local_date.strftime("%m-%d-%Y %H:%M")
+            print(f"\t- {vote[0]} on {local_date_as_str}")
 
 
 def randomize_poll_winner():
@@ -92,7 +111,7 @@ MENU_OPTIONS = {
 
 
 def menu():
-    with get_connection as connection:
+    with get_connection() as connection:
         database.create_tables(connection)
 
     while (selection := input(MENU_PROMPT)) != "6":
